@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Plano Personalizado</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  </head>
+  <body class="bg-gray-100 text-gray-800 p-4">
+    <div class="max-w-5xl mx-auto bg-white shadow-lg rounded p-6 space-y-6">
+      <h1 class="text-2xl font-bold text-center text-green-600">
+        📋 Plano Personalizado com Check-ins
+      </h1>
+
+      <div class="flex justify-center gap-4 mb-6 border-b pb-4">
+        <button
+          onclick="mostrarAba('plano')"
+          class="tab-btn bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded transition-colors"
+        >
+          Plano
+        </button>
+        <button
+          onclick="mostrarAba('checkin')"
+          class="tab-btn bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded transition-colors"
+        >
+          Check-in
+        </button>
+        <button
+          onclick="mostrarAba('graficos')"
+          class="tab-btn bg-purple-500 hover:bg-purple-600 text-white px-4 py-2 rounded transition-colors"
+        >
+          Gráficos
+        </button>
+      </div>
+
+      <div id="aba-plano" class="aba space-y-4">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <input
+            id="nome"
+            type="text"
+            placeholder="Digite o nome do aluno para cadastrar"
+            class="w-full p-2 border border-gray-300 rounded"
+          />
+          <select
+            id="selecao-aluno"
+            onchange="selecionarAluno(this)"
+            class="w-full p-2 border border-gray-300 rounded bg-white"
+          >
+            <option value="">Ou selecione um aluno cadastrado...</option>
+          </select>
+        </div>
+
+        <div>
+          <label for="treino" class="block font-semibold mb-1"
+            >Plano de Treino:</label
+          >
+          <textarea
+            id="treino"
+            rows="5"
+            class="w-full p-2 border rounded"
+          ></textarea>
+        </div>
+
+        <div>
+          <label for="dieta" class="block font-semibold mb-1"
+            >Plano de Alimentação:</label
+          >
+          <textarea
+            id="dieta"
+            rows="5"
+            class="w-full p-2 border rounded"
+          ></textarea>
+        </div>
+
+        <div class="flex gap-2 flex-wrap justify-center pt-4">
+          <button
+            onclick="salvarPlano()"
+            class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded"
+          >
+            Salvar Plano
+          </button>
+          <button
+            onclick="carregarPlano()"
+            class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded"
+          >
+            Carregar Aluno
+          </button>
+          <button
+            onclick="limparCampos()"
+            class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded"
+          >
+            Limpar Campos
+          </button>
+          <button
+            onclick="exportarCSV()"
+            class="bg-teal-500 hover:bg-teal-600 text-white px-4 py-2 rounded"
+          >
+            Exportar CSV
+          </button>
+          <label
+            class="cursor-pointer bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded"
+          >
+            Importar/Atualizar CSV
+            <input
+              type="file"
+              accept=".csv"
+              onchange="importarCSV(event)"
+              class="hidden"
+            />
+          </label>
+        </div>
+      </div>
+
+      <div id="aba-checkin" class="aba hidden space-y-4">
+        <h2 class="text-xl font-semibold text-center text-blue-600">
+          Registrar Acompanhamento
+        </h2>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <input type="date" id="checkin-data" class="p-2 border rounded" />
+          <input
+            type="number"
+            id="checkin-peso"
+            placeholder="Peso (kg)"
+            class="p-2 border rounded"
+          />
+          <input
+            type="number"
+            id="checkin-cintura"
+            placeholder="Cintura (cm)"
+            class="p-2 border rounded"
+          />
+          <input
+            type="number"
+            id="checkin-quadril"
+            placeholder="Quadril (cm)"
+            class="p-2 border rounded"
+          />
+        </div>
+        <div class="text-center">
+          <button
+            onclick="salvarCheckin()"
+            class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded"
+          >
+            Salvar Check-in
+          </button>
+        </div>
+      </div>
+
+      <div id="aba-graficos" class="aba hidden space-y-8">
+        <h2 class="text-xl font-semibold text-center text-purple-600">
+          Evolução do Progresso
+        </h2>
+        <canvas id="graficoPeso"></canvas>
+        <canvas id="graficoMedidas"></canvas>
+      </div>
+    </div>
+
+    <script>
+      window.graficoPesoInstance = null;
+      window.graficoMedidasInstance = null;
+
+      /**
+       * NOVO: Executa a função para popular o menu de seleção assim que a página carregar.
+       */
+      document.addEventListener("DOMContentLoaded", popularSelecaoDeAlunos);
+
+      /**
+       * NOVA FUNÇÃO: Popula o menu <select> com os nomes dos alunos salvos no localStorage.
+       */
+      function popularSelecaoDeAlunos() {
+        const select = document.getElementById("selecao-aluno");
+        select.innerHTML =
+          '<option value="">Ou selecione um aluno cadastrado...</option>'; // Limpa e adiciona a opção padrão
+
+        for (let i = 0; i < localStorage.length; i++) {
+          const chave = localStorage.key(i);
+          if (chave.startsWith("plano_")) {
+            const nomeAluno = chave.replace("plano_", "");
+            const option = document.createElement("option");
+            option.value = nomeAluno;
+            option.textContent = nomeAluno;
+            select.appendChild(option);
+          }
+        }
+      }
+
+      /**
+       * NOVA FUNÇÃO: Chamada quando um aluno é selecionado no menu.
+       * @param {HTMLSelectElement} selectElement - O elemento select que disparou o evento.
+       */
+      function selecionarAluno(selectElement) {
+        const nomeSelecionado = selectElement.value;
+        if (nomeSelecionado) {
+          document.getElementById("nome").value = nomeSelecionado;
+          carregarPlano();
+        }
+      }
+
+      function mostrarAba(idAba) {
+        ["aba-plano", "aba-checkin", "aba-graficos"].forEach((id) => {
+          document.getElementById(id).classList.add("hidden");
+        });
+        document.getElementById(`aba-${idAba}`).classList.remove("hidden");
+      }
+
+      function nomeAluno() {
+        const nome = document.getElementById("nome").value.trim();
+        if (!nome) {
+          alert("Por favor, digite ou selecione o nome do aluno.");
+          document.getElementById("nome").focus();
+          return null;
+        }
+        return nome;
+      }
+
+      function salvarPlano() {
+        const nome = nomeAluno();
+        if (!nome) return;
+
+        const plano = JSON.parse(localStorage.getItem("plano_" + nome)) || {
+          checkins: [],
+        };
+        plano.treino = document.getElementById("treino").value;
+        plano.dieta = document.getElementById("dieta").value;
+
+        localStorage.setItem("plano_" + nome, JSON.stringify(plano));
+        alert("Plano salvo com sucesso!");
+        popularSelecaoDeAlunos(); // Atualiza a lista de alunos caso um novo tenha sido adicionado
+      }
+
+      function carregarPlano() {
+        const nome = nomeAluno();
+        if (!nome) return;
+
+        const plano = JSON.parse(localStorage.getItem("plano_" + nome));
+        // Sincroniza o dropdown com o aluno carregado
+        document.getElementById("selecao-aluno").value = nome;
+
+        if (!plano) {
+          alert(
+            "Nenhum plano encontrado para este aluno. Você pode preencher os campos para criar um novo."
+          );
+          limparCampos();
+          desenharGraficos([]);
+          return;
+        }
+        document.getElementById("treino").value = plano.treino || "";
+        document.getElementById("dieta").value = plano.dieta || "";
+        desenharGraficos(plano.checkins || []);
+      }
+
+      function limparCampos() {
+        document.getElementById("treino").value = "";
+        document.getElementById("dieta").value = "";
+      }
+
+      function salvarCheckin() {
+        const nome = nomeAluno();
+        if (!nome) return;
+
+        const data = document.getElementById("checkin-data").value;
+        const peso = parseFloat(document.getElementById("checkin-peso").value);
+        const cintura = parseFloat(
+          document.getElementById("checkin-cintura").value
+        );
+        const quadril = parseFloat(
+          document.getElementById("checkin-quadril").value
+        );
+
+        if (!data || isNaN(peso) || peso <= 0) {
+          alert("Por favor, preencha a data e um valor de peso válido.");
+          return;
+        }
+
+        const plano = JSON.parse(localStorage.getItem("plano_" + nome)) || {
+          treino: "",
+          dieta: "",
+          checkins: [],
+        };
+
+        plano.checkins.push({
+          data,
+          peso,
+          cintura: isNaN(cintura) ? null : cintura,
+          quadril: isNaN(quadril) ? null : quadril,
+        });
+
+        localStorage.setItem("plano_" + nome, JSON.stringify(plano));
+        alert("Check-in salvo com sucesso!");
+
+        document.getElementById("checkin-data").value = "";
+        document.getElementById("checkin-peso").value = "";
+        document.getElementById("checkin-cintura").value = "";
+        document.getElementById("checkin-quadril").value = "";
+
+        desenharGraficos(plano.checkins);
+        mostrarAba("graficos");
+      }
+
+      function desenharGraficos(checkins) {
+        const checkinsOrdenados = checkins.sort(
+          (a, b) => new Date(a.data) - new Date(b.data)
+        );
+
+        const labels = checkinsOrdenados.map((c) =>
+          new Date(c.data).toLocaleDateString("pt-BR", { timeZone: "UTC" })
+        );
+        const pesos = checkinsOrdenados.map((c) => c.peso);
+        const cinturas = checkinsOrdenados.map((c) => c.cintura);
+        const quadris = checkinsOrdenados.map((c) => c.quadril);
+
+        if (window.graficoPesoInstance) window.graficoPesoInstance.destroy();
+        const ctxPeso = document.getElementById("graficoPeso").getContext("2d");
+        window.graficoPesoInstance = new Chart(ctxPeso, {
+          type: "line",
+          data: {
+            labels: labels,
+            datasets: [
+              {
+                label: "Peso (kg)",
+                data: pesos,
+                borderColor: "rgb(34, 197, 94)",
+                backgroundColor: "rgba(34, 197, 94, 0.2)",
+                fill: true,
+                tension: 0.2,
+                pointRadius: 5,
+                pointBackgroundColor: "rgb(22, 163, 74)",
+              },
+            ],
+          },
+          options: {
+            responsive: true,
+            plugins: {
+              title: {
+                display: true,
+                text: "Evolução do Peso",
+                font: { size: 16 },
+              },
+            },
+          },
+        });
+
+        if (window.graficoMedidasInstance)
+          window.graficoMedidasInstance.destroy();
+        const ctxMedidas = document
+          .getElementById("graficoMedidas")
+          .getContext("2d");
+        window.graficoMedidasInstance = new Chart(ctxMedidas, {
+          type: "line",
+          data: {
+            labels: labels,
+            datasets: [
+              {
+                label: "Cintura (cm)",
+                data: cinturas,
+                borderColor: "rgb(79, 70, 229)",
+                backgroundColor: "rgba(79, 70, 229, 0.2)",
+                fill: true,
+                tension: 0.2,
+                pointRadius: 5,
+                pointBackgroundColor: "rgb(67, 56, 202)",
+                spanGaps: true,
+              },
+              {
+                label: "Quadril (cm)",
+                data: quadris,
+                borderColor: "rgb(147, 51, 234)",
+                backgroundColor: "rgba(147, 51, 234, 0.2)",
+                fill: true,
+                tension: 0.2,
+                pointRadius: 5,
+                pointBackgroundColor: "rgb(126, 34, 206)",
+                spanGaps: true,
+              },
+            ],
+          },
+          options: {
+            responsive: true,
+            plugins: {
+              title: {
+                display: true,
+                text: "Evolução das Medidas (Cintura e Quadril)",
+                font: { size: 16 },
+              },
+            },
+          },
+        });
+      }
+
+      function exportarCSV() {
+        let csvContent =
+          "data:text/csv;charset=utf-8,nome_aluno,data,peso,cintura,quadril\n";
+        let count = 0;
+
+        for (let i = 0; i < localStorage.length; i++) {
+          const chave = localStorage.key(i);
+          if (chave.startsWith("plano_")) {
+            const nomeAluno = chave.replace("plano_", "");
+            const plano = JSON.parse(localStorage.getItem(chave));
+            if (plano.checkins && plano.checkins.length > 0) {
+              plano.checkins.forEach((checkin) => {
+                const linha = [
+                  nomeAluno,
+                  checkin.data || "",
+                  checkin.peso || "",
+                  checkin.cintura || "",
+                  checkin.quadril || "",
+                ].join(",");
+                csvContent += linha + "\n";
+                count++;
+              });
+            }
+          }
+        }
+
+        if (count === 0) {
+          alert("Nenhum check-in encontrado para exportar.");
+          return;
+        }
+
+        const encodedUri = encodeURI(csvContent);
+        const link = document.createElement("a");
+        link.setAttribute("href", encodedUri);
+        link.setAttribute(
+          "download",
+          `checkins_backup_${new Date().toISOString().slice(0, 10)}.csv`
+        );
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      }
+
+      function importarCSV(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = function (e) {
+          try {
+            const linhas = e.target.result
+              .split("\n")
+              .filter((l) => l.trim() !== "");
+            if (linhas.length <= 1) {
+              alert("Arquivo CSV vazio ou com apenas o cabeçalho.");
+              return;
+            }
+
+            const cabecalho = linhas[0].trim().split(",");
+            const dados = linhas.slice(1);
+            let atualizados = 0;
+            let adicionados = 0;
+
+            dados.forEach((linha) => {
+              const valores = linha.trim().split(",");
+              if (valores.length < 3) return;
+
+              const [nome, data, pesoStr, cinturaStr, quadrilStr] = valores;
+              if (!nome || !data || !pesoStr) return;
+
+              const chave = "plano_" + nome;
+              const plano = JSON.parse(localStorage.getItem(chave)) || {
+                treino: "",
+                dieta: "",
+                checkins: [],
+              };
+
+              const novoCheckin = {
+                data: data,
+                peso: parseFloat(pesoStr),
+                cintura: parseFloat(cinturaStr) || null,
+                quadril: parseFloat(quadrilStr) || null,
+              };
+
+              const indexExistente = plano.checkins.findIndex(
+                (c) => c.data === novoCheckin.data
+              );
+
+              if (indexExistente > -1) {
+                plano.checkins[indexExistente] = novoCheckin;
+                atualizados++;
+              } else {
+                plano.checkins.push(novoCheckin);
+                adicionados++;
+              }
+
+              localStorage.setItem(chave, JSON.stringify(plano));
+            });
+
+            alert(
+              `Importação concluída!\n\nCheck-ins Adicionados: ${adicionados}\nCheck-ins Atualizados: ${atualizados}`
+            );
+            popularSelecaoDeAlunos(); // Atualiza a lista de alunos
+            carregarPlano(); // Recarrega os dados do aluno que estiver selecionado
+          } catch (err) {
+            alert("Erro ao processar o arquivo CSV. Verifique o formato.");
+            console.error("Erro na importação de CSV:", err);
+          } finally {
+            event.target.value = "";
+          }
+        };
+        reader.readAsText(file);
+      }
+    </script>
+  </body>
+</html>
